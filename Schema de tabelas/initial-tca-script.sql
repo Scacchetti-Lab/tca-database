@@ -248,8 +248,8 @@ CREATE TABLE "audits" (
   "entity_name" VARCHAR(255) NOT NULL,
   "user_id" UUID,
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT (now()),
-  "previous" JSONB NOT NULL,
-  "new" JSONB NOT NULL,
+  "previous" JSONB,
+  "new" JSONB,
   PRIMARY KEY ("id")
 );
 
