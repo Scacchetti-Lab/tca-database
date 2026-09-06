@@ -1,0 +1,18 @@
+services:
+  db:
+    container_name: totvsai_postgres_container
+    image: pgvector/pgvector:pg18
+    restart: always
+    environment:
+      POSTGRES_USER: ${PG_USERNAME}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DBNAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./schema/initial-tca-script.sql:/docker-entrypoint-initdb.d/initial-tca-script.sql
+      - postgres_data:/var/lib/postgresql
+
+volumes:
+  postgres_data:
+    driver: local
