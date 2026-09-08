@@ -87,6 +87,7 @@ CREATE TABLE "salespersons" (
 -- =========================================================
 CREATE TABLE "squads" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
+  "code" CHAR(11) UNIQUE NOT NULL,
   "name" VARCHAR(255) NOT NULL,
   "manager_id" UUID NOT NULL,
   "description" VARCHAR(255) NOT NULL,
@@ -115,18 +116,19 @@ CREATE TABLE "managers" (
 -- =========================================================
 CREATE TABLE "meetings" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
-  "totvs_id" INTEGER UNIQUE,
-  "transcript_id" UUID UNIQUE NOT NULL,
+  "totvs_id" VARCHAR(20) UNIQUE,
+  "transcript_id" UUID UNIQUE,
+  "client_represent" VARCHAR(255),
   "title" VARCHAR(255) NOT NULL,
-  "summary" TEXT NOT NULL,
+  "summary" TEXT,
   "scheduled" TIMESTAMPTZ NOT NULL,
   "duration_min" INTEGER,
   "status" VARCHAR(50) NOT NULL CHECK ("status" IN ('SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
   "performance_avg" SMALLINT,
-  "feedback" TEXT NOT NULL,
   "priority" VARCHAR(50) CHECK ("priority" IN ('HIGH', 'MEDIUM', 'LOW')),
   "client_id" UUID NOT NULL,
   "is_deleted" BOOLEAN NOT NULL DEFAULT false,
+  "rating" SMALLINT NOT NULL,
   "embeddings" VECTOR(384),
   PRIMARY KEY ("id")
 );
@@ -138,11 +140,9 @@ CREATE TABLE "meetings" (
 -- identificar quem fez cada fala (diarização por locutor).
 -- =========================================================
 CREATE TABLE "meeting_employees" (
-  "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "meeting_id" UUID NOT NULL,
   "user_id" UUID NOT NULL,
-  "feedback_tip" TEXT,
-  PRIMARY KEY ("id")
+  PRIMARY KEY ("meeting_id", "user_id")
 );
 
 -- =========================================================
@@ -154,11 +154,15 @@ CREATE TABLE "clients" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "name" VARCHAR(255) NOT NULL,
   "fantasy_name" VARCHAR(255) NOT NULL,
+  "segment" VARCHAR(255) NOT NULL,
   "cnpj" CHAR(14) UNIQUE NOT NULL,
+  "email" VARCHAR(100) UNIQUE,
+  "phone" VARCHAR(100) UNIQUE,
   "address_id" UUID NOT NULL,
-  "squad_id" UUID,
-  "revenue" DECIMAL(15,2) NOT NULL DEFAULT 0,
-  "status" VARCHAR(255) NOT NULL CHECK ("status" IN ('CRITIC', 'BAD', 'OK', 'GOOD')),
+  "squad_id" UUID NOT NULL,
+  "revenue" DECIMAL(15,2) DEFAULT 0,
+  "status" VARCHAR(255) NOT NULL CHECK ("status" IN ('CRITIC', 'BAD', 'OK', 'GOOD', 'DELETED', 'UNDEFINED')),
+  "is_deleted" BOOLEAN NOT NULL DEFAULT false,
   "embeddings" VECTOR(384),
   PRIMARY KEY ("id")
 );
@@ -259,7 +263,7 @@ CREATE TABLE "audits" (
 CREATE TABLE "meeting_strategic_analyses" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "meeting_id" UUID UNIQUE NOT NULL,
-  "client_id" UUID NOT NULL,
+  "feedback" TEXT NOT NULL,
   "company_status" VARCHAR(50) NOT NULL CHECK ("company_status" IN ('GOOD', 'OK', 'BAD', 'CRITIC')),
   "company_performance" NUMERIC(4,2) NOT NULL,
   "closing_probability" NUMERIC(4,2) NOT NULL,
@@ -280,6 +284,7 @@ CREATE TABLE "meeting_strategic_analyses" (
 CREATE TABLE "meeting_performance_analyses" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "meeting_id" UUID UNIQUE NOT NULL,
+  "feedback" TEXT NOT NULL,
   "engagement" NUMERIC(4,2) NOT NULL,
   "communication_quality" NUMERIC(4,2) NOT NULL,
   "opportunities_seized" NUMERIC(4,2) NOT NULL,
@@ -348,17 +353,31 @@ CREATE TABLE email (
    "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
    "from" VARCHAR(255) NOT NULL,
    "to" VARCHAR(255) NOT NULL,
+   "subject" VARCHAR(255) NOT NULL,
    "body" TEXT NOT NULL,
    "template_id" UUID NOT NULL REFERENCES template(id),
-   "status" VARCHAR(20) NOT NULL DEFAULT 'pending',
-   "provider_message_id" VARCHAR(255),
-   "error_message" TEXT,
-   "attempts" INT NOT NULL DEFAULT 0,
+   "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
    "created_on" TIMESTAMPTZ NOT NULL DEFAULT now(),
    "updated_on" TIMESTAMPTZ NOT NULL DEFAULT now(),
    "scheduled_at" TIMESTAMPTZ
 );
 
+ALTER TABLE email
+ADD CONSTRAINT ck_email_status
+CHECK (status in ('PENDING', 'SENT', 'FAILED', 'SKIPPED'))
+
+-- =========================================================
+-- EMAIL — Salva os emeails enviado como histórico de envio
+-- =========================================================
+CREATE TABLE "meeting_stakeholders" (
+  "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
+  "meeting_id" UUID NOT NULL,
+  "name" VARCHAR(255) NOT NULL,
+  "role" VARCHAR(255),
+  "side" VARCHAR(20) CHECK ("side" IN ('CLIENT', 'COMPANY', 'UNKNOWN')),
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT (now()),
+  PRIMARY KEY ("id")
+);
 
 -- =========================================================
 -- ÍNDICES
@@ -388,6 +407,8 @@ CREATE INDEX "transcript_chunks_embedding_index" ON "transcript_chunks" USING HN
 CREATE INDEX "meeting_strategic_scores_client_index" ON "meeting_strategic_scores" ("client_id", "calculated_at");
 CREATE INDEX "meeting_performance_scores_salesperson_index" ON "meeting_performance_scores" ("salesperson_id", "calculated_at");
 
+CREATE INDEX "meeting_stakeholders_meeting_id_index" ON "meeting_stakeholders" ("meeting_id");
+
 -- =========================================================
 -- COMENTÁRIOS
 -- =========================================================
@@ -405,8 +426,6 @@ COMMENT ON COLUMN "managers"."created_by" IS 'usuário (admin) que criou este re
 COMMENT ON COLUMN "meetings"."scheduled" IS 'Data e hora em que a reunião foi agendada';
 COMMENT ON COLUMN "meetings"."duration_min" IS 'Duração da reunião em minutos';
 COMMENT ON COLUMN "meetings"."type" IS 'Define qual tabela de analytic aplica: SALESPERSON -> meeting_performance_analyses, DIRECTOR -> meeting_strategic_analyses';
-
-COMMENT ON COLUMN "meeting_employees"."feedback_tip" IS 'Dica individualizada por participante -- nulo quando a transcrição não identifica quem fez cada fala (sem diarização por locutor)';
 
 COMMENT ON COLUMN "clients"."revenue" IS 'faturamento mensal';
 COMMENT ON COLUMN "clients"."squad_id" IS 'Carteira do cliente -- base do cálculo de percentual de impacto financeiro';
@@ -440,6 +459,9 @@ COMMENT ON COLUMN "meeting_performance_scores"."streak_count" IS 'Quantidade de 
 ALTER TABLE "meeting_employees" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE "meeting_employees" ADD FOREIGN KEY ("meeting_id") REFERENCES "meetings" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 
+ALTER TABLE "meeting_stakeholders"
+ADD FOREIGN KEY ("meeting_id") REFERENCES "meetings" ("id");
+
 ALTER TABLE "sessions" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "salespersons" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
@@ -461,7 +483,7 @@ ALTER TABLE "users" ADD FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON 
 
 ALTER TABLE "client_analyses" ADD FOREIGN KEY ("client_id") REFERENCES "clients" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 
--- CORRIGIDO: referenciava a coluna "muser_id" (typo), que não existe.
+
 ALTER TABLE "managers" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE "managers" ADD FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 
