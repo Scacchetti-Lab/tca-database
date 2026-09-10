@@ -168,23 +168,6 @@ CREATE TABLE "clients" (
 );
 
 -- =========================================================
--- CLIENT_ANALYSES
--- Cache 1:1 do estado atual do cliente. O histórico vive em
--- meeting_strategic_analyses / meeting_strategic_scores.
--- =========================================================
-CREATE TABLE "client_analyses" (
-  "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
-  "client_id" UUID UNIQUE NOT NULL,
-  "performance" SMALLINT NOT NULL,
-  "closing_probability" SMALLINT NOT NULL,
-  "flexibility" SMALLINT NOT NULL,
-  "risk" SMALLINT NOT NULL,
-  "financial_impact" DECIMAL(8,2) NOT NULL,
-  "financial_status" VARCHAR(255) NOT NULL CHECK ("financial_status" IN ('MINIMAL', 'LOW', 'MEDIUM', 'HIGH', 'SEVERAL')),
-  PRIMARY KEY ("id")
-);
-
--- =========================================================
 -- TRANSCRIPTS
 -- =========================================================
 CREATE TABLE "transcripts" (
@@ -264,6 +247,7 @@ CREATE TABLE "meeting_strategic_analyses" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "meeting_id" UUID UNIQUE NOT NULL,
   "feedback" TEXT NOT NULL,
+  "tips" TEXT NOT NULL,
   "company_status" VARCHAR(50) NOT NULL CHECK ("company_status" IN ('GOOD', 'OK', 'BAD', 'CRITIC')),
   "company_performance" NUMERIC(4,2) NOT NULL,
   "closing_probability" NUMERIC(4,2) NOT NULL,
@@ -378,6 +362,40 @@ CREATE TABLE "meeting_stakeholders" (
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT (now()),
   PRIMARY KEY ("id")
 );
+
+-- =========================================================
+-- meeting_predicts — Salva os emeails enviado como histórico de envio
+-- =========================================================
+CREATE TABLE "meeting_predicts" (
+  "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
+  "meeting_id" UUID UNIQUE NOT NULL,
+  "predict" TEXT,
+  "tips" TEXT,
+  "status" VARCHAR(50) NOT NULL DEFAULT 'CREATED' CHECK ("status" IN ('CREATED', 'PROCESSING', 'COMPLETED', 'CANCELLED')),
+  "reprocess" BOOLEAN DEFAULT FALSE,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT (now()),
+  PRIMARY KEY ("id")
+);
+
+ALTER TABLE "meeting_predicts" ADD FOREIGN KEY ("meeting_id") REFERENCES "meetings" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
+
+-- =========================================================
+-- VIEWS
+-- =========================================================
+
+CREATE OR REPLACE VIEW client_current_analysis AS
+SELECT
+    sa.client_id,
+    ROUND(AVG(sa.company_performance), 2) AS performance,
+    ROUND(AVG(sa.closing_probability), 2) AS closing_probability,
+    ROUND(AVG(sa.flexibility), 2) AS flexibility,
+    ROUND(AVG(sa.risk), 2) AS risk,
+    COALESCE(SUM(sa.financial_impact_value), 0) AS financial_impact,
+    (ARRAY_AGG(sa.financial_impact_status ORDER BY sa.created_at DESC))[1] AS financial_status,
+    COUNT(*)::INTEGER AS meetings_analysed,
+    MAX(sa.created_at) AS last_analysis_at
+FROM meeting_strategic_analyses sa
+GROUP BY sa.client_id;
 
 -- =========================================================
 -- ÍNDICES
