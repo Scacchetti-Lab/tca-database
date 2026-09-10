@@ -189,6 +189,8 @@ CREATE TABLE "sessions" (
   "user_id" UUID NOT NULL,
   "model_used" VARCHAR(255) NOT NULL CHECK ("model_used" IN ('FAST', 'PRO')),
   "last_interaction_id" VARCHAR(255),
+  "is_deleted" BOOLEAN NOT NULL DEFAULT FALSE,
+  "deleted_on" TIMESTAMPTZ,  
   PRIMARY KEY ("id")
 );
 
@@ -246,6 +248,7 @@ CREATE TABLE "audits" (
 CREATE TABLE "meeting_strategic_analyses" (
   "id" UUID NOT NULL DEFAULT (gen_random_uuid()),
   "meeting_id" UUID UNIQUE NOT NULL,
+  "client_id" UUID NOT NULL,
   "feedback" TEXT NOT NULL,
   "tips" TEXT NOT NULL,
   "company_status" VARCHAR(50) NOT NULL CHECK ("company_status" IN ('GOOD', 'OK', 'BAD', 'CRITIC')),
@@ -348,7 +351,7 @@ CREATE TABLE email (
 
 ALTER TABLE email
 ADD CONSTRAINT ck_email_status
-CHECK (status in ('PENDING', 'SENT', 'FAILED', 'SKIPPED'))
+CHECK (status in ('PENDING', 'SENT', 'FAILED', 'SKIPPED'));
 
 -- =========================================================
 -- EMAIL — Salva os emeails enviado como histórico de envio
@@ -443,7 +446,6 @@ COMMENT ON COLUMN "managers"."created_by" IS 'usuário (admin) que criou este re
 
 COMMENT ON COLUMN "meetings"."scheduled" IS 'Data e hora em que a reunião foi agendada';
 COMMENT ON COLUMN "meetings"."duration_min" IS 'Duração da reunião em minutos';
-COMMENT ON COLUMN "meetings"."type" IS 'Define qual tabela de analytic aplica: SALESPERSON -> meeting_performance_analyses, DIRECTOR -> meeting_strategic_analyses';
 
 COMMENT ON COLUMN "clients"."revenue" IS 'faturamento mensal';
 COMMENT ON COLUMN "clients"."squad_id" IS 'Carteira do cliente -- base do cálculo de percentual de impacto financeiro';
@@ -498,9 +500,6 @@ ALTER TABLE "user_profiles" ADD FOREIGN KEY ("profile_id") REFERENCES "profiles"
 
 ALTER TABLE "users" ADD FOREIGN KEY ("address_id") REFERENCES "addresses" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE "users" ADD FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
-
-ALTER TABLE "client_analyses" ADD FOREIGN KEY ("client_id") REFERENCES "clients" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
-
 
 ALTER TABLE "managers" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE "managers" ADD FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON DELETE NO ACTION ON UPDATE NO ACTION DEFERRABLE INITIALLY IMMEDIATE;
