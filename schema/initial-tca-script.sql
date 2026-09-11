@@ -203,6 +203,7 @@ CREATE TABLE "messages" (
   "role" VARCHAR(255) NOT NULL CHECK ("role" IN ('SALESPERSON', 'MANAGER', 'TOTVS_AI')),
   "content" TEXT NOT NULL,
   "created_on" TIMESTAMPTZ NOT NULL DEFAULT (now()),
+  "interaction_id" VARCHAR(255),
   PRIMARY KEY ("id")
 );
 
