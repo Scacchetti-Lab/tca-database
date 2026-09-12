@@ -417,19 +417,22 @@ CREATE INDEX "squads_manager_id_index" ON "squads" ("manager_id");
 
 -- CORRIGIDO: índice referenciava a coluna user_profile_id, que não existe mais.
 CREATE UNIQUE INDEX "meeting_employees_unique_participant" ON "meeting_employees" ("meeting_id", "user_id");
-CREATE INDEX "meeting_employees_meeting_id_index" ON "meeting_employees" ("meeting_id");
+CREATE INDEX IF NOT EXISTS "meeting_employees_meeting_id_index" ON "meeting_employees" ("meeting_id");
 
-CREATE INDEX "clients_squad_id_index" ON "clients" ("squad_id");
+CREATE INDEX IF NOT EXISTS "clients_squad_id_index" ON "clients" ("squad_id");
 
-CREATE INDEX "messages_session_id_index" ON "messages" ("session_id");
-CREATE INDEX "messages_created_on_index" ON "messages" ("created_on");
+CREATE INDEX IF NOT EXISTS "messages_session_id_index" ON "messages" ("session_id");
+CREATE INDEX IF NOT EXISTS "messages_created_on_index" ON "messages" ("created_on");
 
-CREATE INDEX "transcript_chunks_embedding_index" ON "transcript_chunks" USING HNSW ("embedding" vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS "transcript_chunks_embedding_index" ON "transcript_chunks" USING HNSW ("embedding" vector_cosine_ops);
 
-CREATE INDEX "meeting_strategic_scores_client_index" ON "meeting_strategic_scores" ("client_id", "calculated_at");
-CREATE INDEX "meeting_performance_scores_salesperson_index" ON "meeting_performance_scores" ("salesperson_id", "calculated_at");
+CREATE INDEX IF NOT EXISTS "meeting_strategic_scores_client_index" ON "meeting_strategic_scores" ("client_id", "calculated_at");
+CREATE INDEX IF NOT EXISTS "meeting_performance_scores_salesperson_index" ON "meeting_performance_scores" ("salesperson_id", "calculated_at");
 
-CREATE INDEX "meeting_stakeholders_meeting_id_index" ON "meeting_stakeholders" ("meeting_id");
+CREATE INDEX IF NOT EXISTS "meeting_stakeholders_meeting_id_index" ON "meeting_stakeholders" ("meeting_id");
+
+CREATE INDEX IF NOT EXISTS "audits_entity_name_index" ON "audits" ("entity_name", "created_at");
+CREATE INDEX IF NOT EXISTS "audits_user_id_index" ON "audits" ("user_id", "created_at");
 
 -- =========================================================
 -- COMENTÁRIOS

@@ -4,6 +4,7 @@ BEGIN
     RETURN payload
         - 'embeddings'
         - 'embedding'
-        - 'password';
+        - 'password'
+        - 'mfa_token';
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
